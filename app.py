@@ -86,3 +86,6 @@ if __name__ == "__main__":
 
 
     driver.close()
+
+    print("程式執行結束，3秒後將關閉")
+    time.sleep(3)
