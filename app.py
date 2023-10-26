@@ -20,28 +20,7 @@ def connect_db(host, user, pwd, dbname, port):
     return None
 
 
-"""讀取檔案"""
-def read_SQL():
-    path = '../sql.txt'
-    config = dict() # 資料庫設定
-    f = None
-    try:
-        with open(path, 'r', encoding="utf8") as f: # 讀取 JSON檔案
-            lines = f.readlines()
-            for line in lines:
-                s = line.split('=')
-                key = s[0]
-                val = s[1]
-                val = val.replace("\n", "").strip() # 因為有換行符號，因此要做取代
-                config[key] = val
-    except IOError:
-        print('ERROR: can not found ' + path)
-    finally:
-        if f:
-            f.close()
-        return config
-
-if __name__ == "__main__":
+def getUSD(url):
     # chromedriver_autoinstaller.install() # 115版本有問題
     option = webdriver.ChromeOptions()
     # 【參考】https://ithelp.ithome.com.tw/articles/10244446
@@ -54,7 +33,7 @@ if __name__ == "__main__":
 
     driver = webdriver.Chrome("./chromedriver.exe", chrome_options=option) #啟動模擬瀏覽器
     # driver = webdriver.Chrome(chrome_options=option) #啟動模擬瀏覽器
-    driver.get('https://rate.bot.com.tw/xrt/all/day')
+    driver.get(url)
 
     time.sleep(3) # 避免還沒進入頁面就在抓資料
 
@@ -70,22 +49,31 @@ if __name__ == "__main__":
     print(_date)
     print(usd_price)
 
-    # db = connect_db()
-    config = read_SQL()
-    db = connect_db('127.0.0.1', 'root', 'Ru,6e.4vu4wj/3', 'greenhouse', 3306) # 資料庫連線
+    driver.close()
 
+    return usd_price
+
+
+if __name__ == "__main__":
+    
+    url = 'https://rate.bot.com.tw/xrt/all/day'
+    db = connect_db('127.0.0.1', 'root', 'Ru,6e.4vu4wj/3', 'greenhouse', 3306) # 資料庫連線
     if( not db ):
         print("資料庫連線發生問題")
 
-    cursor = db.cursor()
+    try:
+        usd_price = getUSD(url)
+
+        with db.cursor() as cursor:
+            cursor.execute(
+                "UPDATE usdollars SET USD = %s WHERE id = 1",
+                (usd_price)
+            )
+            db.commit()
+    except Exception as e:
+        print(f"發生錯誤: {e}")
 
 
-    sql = f"UPDATE usdollars SET USD = {usd_price} WHERE id = 1"
-    cursor.execute(sql)
-    db.commit()
-
-
-    driver.close()
 
     print("程式執行結束，3秒後將關閉")
     time.sleep(3)
