@@ -21,41 +21,58 @@ def connect_db(host, user, pwd, dbname, port):
 
 
 def getUSD(url):
-    # chromedriver_autoinstaller.install() # 115版本有問題
-    option = webdriver.ChromeOptions()
-    # 【參考】https://ithelp.ithome.com.tw/articles/10244446
-    option.add_argument("headless") # 不開網頁搜尋
-    option.add_argument('blink-settings=imagesEnabled=false') # 不加載圖片提高效率
-    option.add_argument('--log-level=3') # 這個option可以讓你跟headless時網頁端的console.log說掰掰
-    """下面參數能提升爬蟲穩定性"""
-    option.add_argument('--disable-dev-shm-usage') # 使用共享內存RAM
-    option.add_argument('--disable-gpu') # 規避部分chrome gpu bug
+    try:
+        # chromedriver_autoinstaller.install() # 115版本有問題
+        option = webdriver.ChromeOptions()
+        # 【參考】https://ithelp.ithome.com.tw/articles/10244446
+        option.add_argument("headless") # 不開網頁搜尋
+        option.add_argument('blink-settings=imagesEnabled=false') # 不加載圖片提高效率
+        option.add_argument('--log-level=3') # 這個option可以讓你跟headless時網頁端的console.log說掰掰
+        """下面參數能提升爬蟲穩定性"""
+        option.add_argument('--disable-dev-shm-usage') # 使用共享內存RAM
+        option.add_argument('--disable-gpu') # 規避部分chrome gpu bug
 
-    driver = webdriver.Chrome("./chromedriver.exe", chrome_options=option) #啟動模擬瀏覽器
-    # driver = webdriver.Chrome(chrome_options=option) #啟動模擬瀏覽器
-    driver.get(url)
+        driver = webdriver.Chrome(chromedriver_path, chrome_options=option) #啟動模擬瀏覽器
+        # driver = webdriver.Chrome(chrome_options=option) #啟動模擬瀏覽器
+        driver.get(url)
 
-    time.sleep(3) # 避免還沒進入頁面就在抓資料
+        if not driver.title:
+            print(f"📛未成功進入頁面...")
+            pass
+        
+        print(f"✅成功進入頁面...({driver.title})")
 
-    soup = BeautifulSoup(driver.page_source,'html.parser')
-    _date = soup.select('#ie11andabove > div > p.text-info')[0].getText().strip() # 掛牌時間
+        time.sleep(3) # 避免還沒進入頁面就在抓資料
 
-    # td:nth-child(n)
-    # n = 2 (現金-本行買入)     
-    # n = 3 (現金-本行賣出	)     
-    # n = 4 (即期-本行買入)     
-    # n = 5 (即期-本行賣出)     
-    usd_price = soup.select('#ie11andabove > div > table > tbody > tr:nth-child(1) > td:nth-child(5)')[0].get_text()
-    print(_date)
-    print(usd_price)
+        soup = BeautifulSoup(driver.page_source,'html.parser')
+        _date = soup.select('#ie11andabove > div > p.text-info')[0].getText().strip() # 掛牌時間
 
-    driver.close()
+        # td:nth-child(n)
+        # n = 2 (現金-本行買入)     
+        # n = 3 (現金-本行賣出	)     
+        # n = 4 (即期-本行買入)     
+        # n = 5 (即期-本行賣出)     
+        usd_price = soup.select('#ie11andabove > div > table > tbody > tr:nth-child(1) > td:nth-child(5)')[0].get_text()
+        print(_date)
+        print(f"即期-本行賣出: {usd_price}")
+        return usd_price
+    except KeyboardInterrupt:
+        print("----(已中斷程式)----")
 
-    return usd_price
+    except Exception as e:
+        print(f"捕捉資料發生錯誤: {e}")
+        return None
+    
+    finally: # 最終都會關閉 chromedriver
+        driver.close()
+        driver.quit()
+
+    
+
 
 
 if __name__ == "__main__":
-    
+    chromedriver_path = './chromedriver.exe'
     url = 'https://rate.bot.com.tw/xrt/all/day'
     db = connect_db('127.0.0.1', 'root', 'Ru,6e.4vu4wj/3', 'greenhouse', 3306) # 資料庫連線
     if( not db ):
@@ -64,12 +81,13 @@ if __name__ == "__main__":
     try:
         usd_price = getUSD(url)
 
-        with db.cursor() as cursor:
-            cursor.execute(
-                "UPDATE usdollars SET USD = %s WHERE id = 1",
-                (usd_price)
-            )
-            db.commit()
+        if usd_price:
+            with db.cursor() as cursor:
+                cursor.execute(
+                    "UPDATE usdollars SET USD = %s WHERE id = 1",
+                    (usd_price)
+                )
+                db.commit()
     except Exception as e:
         print(f"發生錯誤: {e}")
 
