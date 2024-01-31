@@ -1,8 +1,35 @@
 import time
 import pymysql #資料庫套件
 from selenium import webdriver
-import chromedriver_autoinstaller
 from bs4 import BeautifulSoup
+
+import logging
+
+def setup_logger(log_file='app.log'):
+    # 创建一个记录器
+    logger = logging.getLogger('my_logger')
+    logger.setLevel(logging.DEBUG)
+
+    # 创建一个文件处理程序，用于将日志写入文件
+    file_handler = logging.FileHandler(log_file, encoding='utf-8')
+    file_handler.setLevel(logging.DEBUG)
+
+    # 创建一个控制台处理程序，用于在控制台输出日志
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+
+    # 创建一个格式器，用于定义日志消息的格式
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    file_handler.setFormatter(formatter)
+    console_handler.setFormatter(formatter)
+
+    # 将处理程序添加到记录器
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+
+    return logger
+
+
 
 def connect_db(host, user, pwd, dbname, port):
     try:
@@ -32,12 +59,12 @@ def getUSD(url):
         option.add_argument('--disable-dev-shm-usage') # 使用共享內存RAM
         option.add_argument('--disable-gpu') # 規避部分chrome gpu bug
 
-        driver = webdriver.Chrome(chromedriver_path, chrome_options=option) #啟動模擬瀏覽器
+        driver = webdriver.Chrome(CHROMEDRIVER_PATH, chrome_options=option) #啟動模擬瀏覽器
         # driver = webdriver.Chrome(chrome_options=option) #啟動模擬瀏覽器
         driver.get(url)
 
         if not driver.title:
-            print(f"📛未成功進入頁面...")
+            logger.error(f"📛未成功進入頁面...: {e}")
             pass
         
         print(f"✅成功進入頁面...({driver.title})")
@@ -72,7 +99,10 @@ def getUSD(url):
 
 
 if __name__ == "__main__":
-    chromedriver_path = './chromedriver.exe'
+    # 操作日誌
+    logger = setup_logger()
+
+    CHROMEDRIVER_PATH = './chromedriver.exe'
     url = 'https://rate.bot.com.tw/xrt/all/day'
     db = connect_db('127.0.0.1', 'root', 'Ru,6e.4vu4wj/3', 'greenhouse', 3306) # 資料庫連線
     if( not db ):
@@ -82,14 +112,18 @@ if __name__ == "__main__":
         usd_price = getUSD(url)
 
         if usd_price:
-            with db.cursor() as cursor:
-                cursor.execute(
-                    "UPDATE usdollars SET USD = %s WHERE id = 1",
-                    (usd_price)
-                )
-                db.commit()
+            try:
+                with db.cursor() as cursor:
+                    cursor.execute(
+                        "UPDATE usdollars SET USD = %s WHERE id = 1",
+                        (usd_price)
+                    )
+                    db.commit()
+                    logger.info(f"更新美金資訊成功: {usd_price}")
+            except Exception as e:
+                logger.error(f"更新美金資訊發生錯誤: {e}")
     except Exception as e:
-        print(f"發生錯誤: {e}")
+        logger.error(f"發生不明錯誤: {e}")
 
 
 
